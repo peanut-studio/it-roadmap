@@ -70,11 +70,10 @@
     var c = stats.counts;
     var pct = function (n) { return stats.total ? (n / stats.total) * 100 : 0; };
 
-    var label = BAR_SEGMENTS.map(function (s) {
-      return s.label + " " + c[s.key] + "개";
-    }).join(", ") + ", 전체 " + stats.total + "개";
-
-    return '<div class="stacked" role="img" aria-label="' + esc(label) + '">' +
+    /* 낭독기에 이 막대를 읽히지 않는다. 바로 밑 범례(bookLegend)가 같은 숫자를
+       같은 순서로 글자로 적어 두므로, 막대까지 이름을 달면 "퀴즈 통과 21개,
+       학습 완료 8개…" 를 연달아 두 번 듣게 된다. 막대는 옆 글자의 그림이다. */
+    return '<div class="stacked" aria-hidden="true">' +
       BAR_SEGMENTS.map(function (s) {
         return '<div class="stacked__seg stacked__seg--' + s.key +
           '" style="width:' + pct(c[s.key]) + '%"></div>';
@@ -162,7 +161,10 @@
     }
 
     return '<div class="book__legend">' + items.map(function (x) {
-      return '<span class="legend-item">' + statusDot(x.key) + esc(x.label) + " " + x.n + "</span>";
+      // 점 옆에 라벨과 숫자가 글자로 있다. 점까지 이름을 달면 같은 말이 두 번 난다.
+      // statusDot 자체는 그대로 둔다 — 목록에서는 점이 상태를 나르는 유일한 표시다.
+      return '<span class="legend-item"><span class="dot dot--' + x.key +
+        '" aria-hidden="true"></span>' + esc(x.label) + " " + x.n + "</span>";
     }).join("") + "</div>";
   }
 
@@ -212,8 +214,18 @@
       return Store.statusOf(t.id) === Store.STATUS.LEARNED;
     }).length;
 
+    /* 발판에 적는 숫자는 실제로 받게 될 판의 길이다. 재고를 적으면 안 된다 —
+       "읽은 단어 512개, 뜻을 떠올려볼까요" 를 누르고 12장을 받으면 앱이
+       거짓말을 한 것이 된다. 재고가 더 많으면 그건 뒤에 따로 적는다. */
+    var recallMax = (window.Recall && window.Recall.SESSION_MAX) || 12;
+    var recallNow = Math.min(toRecall, recallMax);
+
     var step = toRecall
-      ? { action: "start-recall", icon: "layers", label: "읽은 단어 " + toRecall + "개, 뜻을 떠올려볼까요" }
+      ? {
+          action: "start-recall", icon: "layers",
+          label: "뜻을 떠올려볼까요 · " + recallNow + "개" +
+            (toRecall > recallNow ? " (읽은 단어 " + toRecall + "개 중)" : ""),
+        }
       : toQuiz && !skipQuiz
         ? { action: "go", to: "/quiz", icon: "quiz", label: "학습 완료한 " + toQuiz + "개, 퀴즈로 확인할까요" }
         : null;
@@ -855,7 +867,10 @@
         var ask = asked(item);
         return '<li><span class="selfcheck__n" aria-hidden="true">' + (i + 1) + "</span>" +
           '<span class="selfcheck__body">' +
-          '<span class="selfcheck__q">' + esc(ask.q) + "</span>" +
+          /* esc 가 아니라 inline 이다. 확인 질문 1,908개 중 73개가 `/24`
+             `23456` 처럼 인라인 코드를 품고 있는데, 그냥 이스케이프하면
+             백틱이 글자로 찍혀 "`/24` 로는 왜 모자라나" 가 된다. */
+          '<span class="selfcheck__q">' + UI.inline(ask.q) + "</span>" +
           jumpButton(ask.at) + "</span></li>";
       }).join("") + "</ol></section>";
   }
@@ -943,8 +958,19 @@
       return '<button class="btn btn--primary" data-action="quiz-one" data-id="' + esc(term.id) + '">' +
         UI.icon("quiz", 18) + "퀴즈로 확인하기</button>";
     }
-    return '<button class="btn btn--primary" data-action="mark-learned" data-id="' + esc(term.id) + '">' +
-      UI.icon("check", 18) + "학습 완료</button>";
+    /* 읽는 중일 때의 다음 걸음은 "학습 완료" 가 아니라 "떠올려 보기" 다.
+
+       이 앱의 목표는 읽은 사람이 그 단어를 남에게 설명할 수 있게 되는 것인데,
+       단추 하나로 학습 완료가 되면 끝까지 스크롤한 것과 아는 것이 같아진다.
+       떠올리기는 그 사이에 있어야 할 한 걸음인데, 여기까지 들어오는 문이
+       홈의 얇은 발판 하나뿐이라 대부분 이 자리에서 건너뛰었다.
+
+       한 장짜리 판이 열리고, 거기서 "떠올랐다" 를 누르면 recall-got 이
+       markLearned 를 부른다(js/recall.js). 그래서 도착점은 그대로다 —
+       가는 길에 스스로 한 번 말해 보는 것이 끼어들 뿐이다.
+       ✕ 로 나가면 읽던 자리로 되돌아온다(quit-recall 의 session.from). */
+    return '<button class="btn btn--primary" data-action="recall-one" data-id="' + esc(term.id) + '">' +
+      UI.icon("layers", 18) + "떠올려 보기</button>";
   }
 
   function neighbours(term) {
@@ -1116,6 +1142,10 @@
      "학습 완료" 를 누르면 맨 위로 튀고 펼쳐 둔 접이식이 전부 닫혔다.
      다 읽은 사람이 누르라고 만든 단추가 다 읽은 흔적을 지우고 있었다.
      바뀌는 것은 배지와 하단 단추 하나뿐이므로 제자리에서 갈아 끼운다. */
+  /* 지금 이 이름을 부르는 단추는 없다. 단어 화면의 첫 단추가 떠올리기를 거치도록
+     바뀌면서(primaryAction) 그 길로 옮겨 갔고, 표시 자체는 recall-got 이 단다.
+     핸들러는 남겨 둔다 — "읽었다고 표시한다" 는 이 앱의 기본 동작이라,
+     다시 필요해지는 자리가 생기면 여기서 이어 쓰면 된다. */
   App.on("mark-learned", function (data) {
     Store.markLearned(data.id);
     UI.toast("학습 완료로 표시했습니다", "check");
@@ -1146,7 +1176,12 @@
     target.__land = setTimeout(function () {
       target.classList.remove("is-landed");
     }, LAND_MS);
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    /* 동작 축소를 켠 사람에게는 미끄러지지 않고 바로 옮긴다.
+       CSS 의 전역 규칙(app.css scroll-behavior:auto)은 CSS 로 굴리는 스크롤만
+       덮고, 스크립트가 behavior:"smooth" 로 시키면 그건 그대로 미끄러진다.
+       앱의 다른 스크롤 두 곳(quiz-screens revealFeedback)은 이미 물어보고 있다. */
+    var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }
 
   document.addEventListener("click", function (event) {
@@ -1294,6 +1329,12 @@
   }
 
   App.register("/progress", function () {
+    /* 색인을 못 받으면 통계가 전부 0 이라 "아직 아무것도 안 했다" 로 읽힌다.
+       실제로는 앱이 파일을 못 받은 것이고 기록은 그대로 있다. 홈·단어장과
+       같은 말을 하고 같은 복구 단추를 준다. */
+    if (!Store.books().length) {
+      return topbar({ title: "진도", right: themeButton() }) + indexFailed();
+    }
     var s = Store.overallStats();
     var streak = Store.streak();
     /* 데이터를 인덱스와 본문으로 가를 때 window.VOCABULARY_DATA 가 없어졌는데
@@ -1315,7 +1356,14 @@
       /* 가장 큰 숫자 자리에 "전체 단어 36"이 있었다. 그건 내 성취가 아니라
          단어장의 크기다. 내가 한 일을 앞에 두고, 전체는 그 기준으로 뒤에 둔다. */
       '<div class="summary-grid" style="margin-top:8px">' +
-      statTile(s.passed, "퀴즈 통과", "check-double", "passed") +
+      /* 여기만 everPassed 다. 이 자리는 "내가 해 둔 일" 을 세는 자리라
+         복습이 돌아왔다고 줄면 안 된다. 아래 단어장별 막대는 passed 를 그대로
+         쓴다 — 그건 "지금 어디까지 갔나" 를 그리는 것이라 줄어야 맞다.
+
+         이름도 "퀴즈 통과" 가 아니라 "통과해 본 단어" 다. "퀴즈 통과" 는 상태
+         이름이고, 단어 목록의 거르개(FILTERS)와 배지가 그 이름으로 지금 통과 중인
+         것만 보여준다. 같은 이름에 다른 숫자를 달면 눌러 보고 어긋난 것을 본다. */
+      statTile(s.everPassed, "통과해 본 단어", "check-double", "passed") +
       statTile(s.studied, "공부한 단어", "book") +
       statTile(s.review, "복습 필요", "rotate", "review") +
       statTile(s.total, "전체 단어", "layers") +
@@ -1403,7 +1451,8 @@
   function resetModalHtml() {
     var stats = Store.overallStats();
     var rows = [
-      { label: "퀴즈 통과", n: stats.passed },
+      // 지우면 통과 기록이 통째로 사라진다. 지금 상태가 아니라 쌓인 것을 센다.
+      { label: "통과해 본 단어", n: stats.everPassed },
       { label: "공부한 단어", n: stats.studied },
       { label: "복습 대기", n: stats.review },
       { label: "학습 기록", n: Store.history(999).length },
@@ -1473,5 +1522,9 @@
     progressBar: progressBar,
     emptyState: emptyState,
     relativeTime: relativeTime,
+    /* 색인을 못 받았을 때 쓰는 화면. 홈·단어장은 이미 이걸 쓰는데
+       퀴즈만 제 손으로 빈 화면을 만들고 있었다. 같은 사고에 앱이 두 가지
+       말을 하면 안 된다. */
+    indexFailed: indexFailed,
   };
 })();

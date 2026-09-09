@@ -28,8 +28,13 @@ window.Quiz = (function () {
     MEANING: "설명에서 용어 찾기",
     DEFINE: "용어의 뜻 고르기",
     RELATED: "같이 쓰이는 개념",
-    MYTH: "맞는 말인지 가리기",
-    MYTH_PICK: "틀린 설명 고르기",
+    /* 이 둘의 이름이 서로 뒤바뀌어 있었다. MYTH 는 "사실이 아닌 것" 을
+       고르게 하고(671행) MYTH_PICK 은 "사실인 것" 을 고르게 하는데(713행),
+       이름은 정반대로 달려 있었다. 이름은 문제 위에 눈썹으로 뜨고 결과
+       화면의 "틀린 곳" 집계에도 그대로 쓰이므로, 읽는 사람은 시키는 말과
+       반대되는 안내를 먼저 본다. */
+    MYTH: "틀린 설명 고르기",
+    MYTH_PICK: "사실인 설명 고르기",
     ANALOGY: "비유에서 용어 찾기",
     FIGURE: "그림이 답하는 질문",
     ORDER: "일이 벌어지는 순서",
@@ -806,7 +811,24 @@ window.Quiz = (function () {
      390px 화면에서 드래그는 스크롤과 싸우고, 그걸 피하려면 화면 장치가 늘어난다.
      대신 늘어놓은 것 넷 중 하나를 고르게 한다. */
 
-  var SWAPS = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
+  /* 오답 셋을 만드는 법.
+
+     예전에는 정답에서 두 마디를 맞바꾼 것 셋이었다. 그러면 정답이 넷 중
+     한가운데에 서고, 도해를 한 번도 안 본 사람이 "나머지 셋과 가장 덜
+     다른 것" 하나만 골라 **100%** 맞힌다(20만 번 모의). 자리별 다수결로도
+     85% 였다. 찍기가 25% 인 문제에서 이건 이해를 재는 게 아니다.
+
+     그래서 자리 넷을 한 고리로 도는 순열(4-순환)만 쓴다. 정답에 그것을
+     한 번, 두 번, 세 번 먹인 것이 오답 셋이다. 그러면 넷 중 어느 둘을
+     집어도 네 자리가 전부 다르므로, 구조에서 새어 나오는 정보가 0 이 된다.
+     같은 모의에서 다수결 25.0%(=찍기), 중심·변두리 공격은 아예 못 고른다.
+
+     푸는 쪽에서 보면 "어느 마디가 먼저 오는가" 하나로 셋이 걸러진다.
+     그건 도해를 읽었어야 아는 것이다. */
+  var ROTORS = [
+    [1, 2, 3, 0], [1, 3, 0, 2], [2, 0, 3, 1],
+    [2, 3, 1, 0], [3, 0, 1, 2], [3, 2, 0, 1],
+  ];
 
   function canOrder(target) {
     return factsOf(target).orders.length ? 1 : 0;
@@ -816,15 +838,16 @@ window.Quiz = (function () {
     var data = factsOf(target);
     if (!data.orders.length) return null;
     var right = data.orders[Math.floor(Math.random() * data.orders.length)];
+    if (right.length !== 4) return null;
 
-    // 오답은 두 마디를 맞바꾼 것 셋. 바꾸는 자리를 서로 다르게 골라야 셋이 겹치지 않는다.
-    var wrongs = shuffle(SWAPS).slice(0, 3).map(function (pair) {
-      var seq = right.slice();
-      var tmp = seq[pair[0]];
-      seq[pair[0]] = seq[pair[1]];
-      seq[pair[1]] = tmp;
-      return { text: seq.join(" → "), sourceId: null };
-    });
+    // security-ok: OWASP-A02-2 — 보기 넷을 어느 방향으로 돌릴지 고르는 값이다. 비밀이 아니다.
+    var rotor = ROTORS[Math.floor(Math.random() * ROTORS.length)];
+    var wrongs = [];
+    var cur = right;
+    for (var w = 0; w < 3; w++) {
+      cur = [cur[rotor[0]], cur[rotor[1]], cur[rotor[2]], cur[rotor[3]]];
+      wrongs.push({ text: cur.join(" → "), sourceId: null });
+    }
 
     var options = assemble(target.id + ":order",
       { text: right.join(" → "), sourceId: target.id }, wrongs);

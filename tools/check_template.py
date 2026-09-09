@@ -52,6 +52,11 @@ CHECK_COUNT = 3
 CHECK_MIN = 12  # 확인 질문 최소 길이. "DNS 란?" 같은 되묻기를 막는다.
 
 GIST_MAX = 60      # 정의 첫 문단
+# 정의 첫 문단 뒤에 오는 배경 글. 여기만 상한이 없어서 도해 바로 앞에 447자짜리
+# 벽이 서 있었다. 첫 문단은 60자로 조여 두고 그 다음을 안 재면, 조인 만큼이
+# 바로 아래로 밀려나 결국 같은 자리에서 같은 벽을 만난다.
+BACK_MAX = 300     # 넘으면 실패
+BACK_WARN = 200    # 넘으면 경고 (지금 63편)
 NAME_MAX = 8       # 흐름 마디의 이름
 CELL_MAX = 14      # 대조 한 칸
 FLOW_RANGE = (4, 7)
@@ -89,6 +94,12 @@ DIA_BLOCK = re.compile(r"```도해\r?\n(.*?)\r?\n```", re.S)
 # `- **앞부분** — 뒷부분` 한 줄. 흔한 오해와 실제 사례가 같은 모양을 쓴다.
 # 굵은 앞부분이 눈이 걸리는 자리고, 대시가 거기까지가 이름이라고 알려준다.
 ITEM_LINE = re.compile(r"^\s*-\s*\*\*(.+?)\*\*\s*[—–-]\s*(.+)$", re.M)
+
+# 출처를 본문 주어로 끌어올린 말투. "파이썬 문서는 …고 적는다" 처럼 쓰면
+# 읽는 사람이 받는 것은 사실이 아니라 "누가 그렇게 적었다" 는 사실이다.
+# 근거는 바닥 출처 줄이 맡는다 — 본문은 사실을 말한다.
+CITE_VOICE = re.compile(r"문서(는|가|도)|고 적는다|고 못 박는다")
+CITE_MAX = 3       # 한 절에 이만큼까지는 봐준다 (지금 95편이 넘는다)
 
 # ------------------------------------------------------------ 새로 들인 표기
 #
@@ -358,7 +369,7 @@ def check_panels(sections: list[tuple[str, str]], bad: list[str]) -> None:
         )
 
 
-def check_definition(body: str, bad: list[str]) -> None:
+def check_definition(body: str, bad: list[str], warn: list[tuple[str, str]]) -> None:
     if not body:
         return
     gist = re.sub(r"[*`]", "", body.split("\n\n")[0].strip())
@@ -375,6 +386,15 @@ def check_definition(body: str, bad: list[str]) -> None:
     if "### 예" not in body:
         bad.append("정의 안에 '### 예' 가 없다")
 
+    # 첫 문단 뒤의 배경 글. '### 이름' 같은 소제목 블록은 빼고 잰다 —
+    # 그것들은 저마다 자기 자리와 자기 규칙이 있는 칸이다.
+    tail = [p for p in body.split("\n\n")[1:] if not p.strip().startswith("###")]
+    back = re.sub(r"[*`]", "", " ".join(tail)).strip()
+    if len(back) > BACK_MAX:
+        bad.append(f"정의 배경 글이 {len(back)}자다 ({BACK_MAX}자 이내) — 도해 앞에 벽이 선다")
+    elif len(back) > BACK_WARN:
+        warn.append(("back", f"정의 배경 글이 {len(back)}자다 ({BACK_WARN}자 넘음)"))
+
 
 def check_figure(body: str, bad: list[str]) -> None:
     found = diagrams(body)
@@ -382,6 +402,30 @@ def check_figure(body: str, bad: list[str]) -> None:
         bad.append(f"'그림으로 보기' 안의 도해가 {len(found)}개다 (1개)")
     if DIA_BLOCK.sub("", body).strip():
         bad.append("'그림으로 보기' 에 그림 말고 글이 있다")
+
+
+def check_cite(sections: list[tuple[str, str]], warn: list[tuple[str, str]]) -> None:
+    """출처를 본문 주어로 끌어올린 말투가 한 절에 몇 번 나오나.
+
+    "파이썬 문서는 …라고 적는다" 는 틀린 문장이 아니다. 다만 읽는 사람이
+    받아 가는 것이 "해시 테이블은 열쇠로 값을 바로 꺼낸다" 가 아니라
+    "누가 그렇게 적었다" 가 된다. 이 앱의 목표는 읽은 사람이 남에게
+    설명할 수 있게 되는 것인데, 이 말투로는 남에게 옮길 것이 인용뿐이다.
+    근거는 바닥 출처 줄이 이미 맡고 있다.
+
+    실패가 아니라 경고인 이유: 지금 95편이 걸린다. 실패로 두면 전수 통과가
+    깨지고, 그러면 --require 로 한 규칙씩 조여 올리는 길이 같이 막힌다.
+    🧒 열 살에게만 0회로 조인다 — 거기는 지금도 0이라 오탐이 없고,
+    열 살에게 설명하면서 문서를 인용할 일은 없다.
+    """
+    for head, body in sections:
+        n = len(CITE_VOICE.findall(body))
+        if not n:
+            continue
+        if canonical(head) == "🧒 열 살에게":
+            warn.append(("cite", f"{head}: 인용 말투가 {n}번 나온다 — 여기는 0이어야 한다"))
+        elif n > CITE_MAX:
+            warn.append(("cite", f"{head}: 인용 말투가 {n}번 나온다 ({CITE_MAX}번 이내)"))
 
 
 def check_related(body: str, bad: list[str]) -> None:
@@ -423,6 +467,12 @@ def check_example(body: str, warn: list[str]) -> None:
     bullets = len(re.findall(r"^\s*-\s+", body, re.M))
     if bullets > len(items):
         warn.append(("examples", f"실제 사례 {bullets - len(items)}줄이 '**어디서** — 설명' 형식이 아니다"))
+
+    # 세 항목이 전부 문서 요약이면 "언제 만나는지" 가 한 줄도 안 남는다.
+    # 한 항목·두 항목으로는 안 잰다 — 굵은 라벨이 이미 상황인 편이 많아 오탐이 는다.
+    lines = re.findall(r"^\s*-\s+(.*)$", body, re.M)
+    if len(lines) >= 3 and all(CITE_VOICE.search(x) or "문서가 드는 예" in x for x in lines):
+        warn.append(("examples", "실제 사례 세 항목이 다 문서 요약이다 — 어디서 만나는지가 없다"))
 
 
 def aim_of(ask: str) -> tuple[str, str]:
@@ -607,7 +657,7 @@ def check(path: str) -> tuple[list[str], list[tuple[str, str]]]:
 
     check_structure(title, sections, bad)
     check_panels(sections, bad)
-    check_definition(body_of.get("📝 정의", ""), bad)
+    check_definition(body_of.get("📝 정의", ""), bad, warn)
     check_figure(body_of.get("🖼️ 그림으로 보기", ""), bad)
     check_example(body_of.get("💡 실제 사례", ""), warn)
     check_myths(body_of.get("🚫 흔한 오해", ""), bad)
@@ -617,6 +667,7 @@ def check(path: str) -> tuple[list[str], list[tuple[str, str]]]:
     check_tryit(body_of.get("📝 정의", ""), warn)
     check_selfcheck(body_of.get("❓ 이해했는지", ""), jump_targets(sections), bad, warn)
     check_related(body_of.get("🔗 관련 용어", ""), bad)
+    check_cite(sections, warn)
 
     for head, body in sections:
         for i, lines in enumerate(diagrams(body)):

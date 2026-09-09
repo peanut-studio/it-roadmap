@@ -53,6 +53,7 @@ window.App = (function () {
      는 뜻이라, history.back() 이 앱 밖으로 나갈 걱정도 없다. */
   var pendingLateral = false;
   var arrivedLateral = false;
+  var pendingReplace = false;
 
   function seqOf(state) {
     return state && typeof state.seq === "number" ? state.seq : 0;
@@ -60,18 +61,25 @@ window.App = (function () {
 
   /* 지금 이력 항목에 번호를 찍는다. 이미 번호가 있으면(뒤로 와서 다시 보는
      항목이면) 그대로 두고 기준만 옮긴다 — 다시 찍으면 순서가 뒤집힌다. */
-  function stampSeq() {
+  function stampSeq(cameFrom) {
     var st = history.state;
     var seq = seqOf(st);
     /* 이미 찍힌 항목이면 그때의 옆걸음 표시를 그대로 믿는다. 새 항목이면
        방금 일어난 이동이 옆걸음이었는지를 쓴다. */
     var lat = st && typeof st.lat === "boolean" ? st.lat : pendingLateral;
+    /* 이 항목 바로 앞에 무엇이 있었는지도 같이 적는다. back() 이 쓴다 —
+       올라갈 곳이 마침 바로 앞 항목이면 새 항목을 얹는 대신 되감아야
+       같은 주소가 두 번 겹치지 않는다. 옆걸음 표시와 같은 규칙으로,
+       이미 찍힌 항목이면 그때 적어 둔 것을 그대로 믿는다. */
+    var prev = st && typeof st.prev === "string"
+      ? st.prev
+      : (pendingReplace ? null : cameFrom || null);
     if (!seq) {
       navSeq += 1;
       seq = navSeq;
     }
     try {
-      history.replaceState({ seq: seq, lat: lat }, "");
+      history.replaceState({ seq: seq, lat: lat, prev: prev }, "");
     } catch (err) {
       /* file:// 이나 사생활 보호 모드에서 막힐 수 있다. 막히면 방향 판정만
          둔해지고 화면은 그대로 그려진다. */
@@ -79,6 +87,7 @@ window.App = (function () {
     lastSeq = seq;
     arrivedLateral = !!lat;
     pendingLateral = false;
+    pendingReplace = false;
   }
 
   function register(pattern, render) {
@@ -127,6 +136,13 @@ window.App = (function () {
 
   function navigate(path, replace, dir) {
     pendingDir = dir || "forward";
+    /* 치환으로 만든 항목에는 "앞 항목" 을 적지 않는다.
+
+       치환은 지금 항목을 덮어쓰는 것이라, 우리가 아는 "떠나온 경로" 는
+       덮어쓴 그 항목이지 이력에서 하나 앞에 있는 항목이 아니다. 그것을
+       prev 로 적으면 back() 이 되감을 곳을 잘못 안다. 적지 않으면
+       back() 은 지금까지 하던 치환으로 그대로 떨어진다. */
+    pendingReplace = !!replace;
     if (replace) {
       location.replace("#" + path);
     } else {
@@ -175,9 +191,29 @@ window.App = (function () {
       return;
     }
     var up = parentOf(here);
-    // ← 는 이력을 쌓지 않는다. 위로 올라간 자리에서 OS 뒤로가기를 누르면
-    // 방금 올라온 화면으로 되돌아가는 고리가 생기기 때문이다.
-    if (up !== here) navigate(up, true, "back");
+    if (up === here) return;
+
+    /* 올라갈 곳이 마침 바로 앞 이력 항목이면 되감는다.
+
+       치환(location.replace)만 쓰면 같은 주소가 이력에 두 번 눕는다.
+       /books → /books/cs → /term/x 에서 ← 를 누르면 3번 항목이 /books/cs 로
+       바뀌어 [/books, /books/cs, /books/cs] 가 된다. 여기서 OS 뒤로가기를
+       누르면 브라우저는 2번으로 옮겨 가지만 주소가 똑같아 hashchange 가
+       안 뜬다 — 화면이 그대로라 사용자에게는 첫 눌림이 씹힌 것으로 보인다.
+
+       되감으면 항목이 하나 줄어 그 겹침 자체가 생기지 않는다. prev 는 우리가
+       그린 항목에만 적히므로, 밖에서 바로 들어온 자리에서는 null 이라
+       아래 치환으로 떨어진다 — 앱 밖으로 나가 버릴 걱정이 없다. */
+    var st = history.state;
+    if (st && st.prev === up) {
+      pendingDir = "back";
+      history.back();
+      return;
+    }
+
+    // 그 밖에는 치환한다. ← 는 이력을 쌓지 않는다 — 위로 올라간 자리에서
+    // OS 뒤로가기를 누르면 방금 올라온 화면으로 되돌아가는 고리가 생긴다.
+    navigate(up, true, "back");
   }
 
   /* 탭바는 최상위 화면에서만 보인다.
@@ -320,9 +356,17 @@ window.App = (function () {
       : null;
 
     var html = found.render(found.params);
-    if (!inPlace) {
-      root.className = goingBack ? "screen-enter screen-enter--back" : "screen-enter";
-    }
+    /* 화면 전환 표시는 전환일 때만 붙이고, 제자리 갱신이면 반드시 걷는다.
+
+       걷지 않으면 이 함수의 약속이 깨진다. 전환 표시는 #view 에 붙는데
+       움직이는 것은 그 안의 main 이다(css/app.css 2547행). innerHTML 을
+       갈아끼우면 main 이 새로 생기므로, 표시가 남아 있는 한 갱신 때마다
+       화면 전체가 투명도 0 에서 12px 미끄러져 들어온다.
+       실측: 배지 하나 바뀌는 refresh() 한 번에 screen-forward 가 다시 켜졌다.
+       2000px 을 내려가 읽던 사람에게는 글이 통째로 한 번 깜빡이는 일이다. */
+    root.className = inPlace
+      ? ""
+      : goingBack ? "screen-enter screen-enter--back" : "screen-enter";
     // 화면 함수는 문자열 템플릿으로 조립하되, 데이터가 들어가는 모든 지점에서
     // UI.esc 또는 UI.markdown(내부에서 먼저 이스케이프)을 통과시킨다.
     // 이스케이프 없이 값을 끼워 넣는 화면 함수는 이 프로젝트에서 버그로 취급한다.
@@ -347,8 +391,9 @@ window.App = (function () {
         heading.focus({ preventScroll: true });
       }
 
+      var cameFrom = lastPath;
       lastPath = path;
-      stampSeq();
+      stampSeq(cameFrom);
     }
 
     document.dispatchEvent(new CustomEvent("screen:rendered", {
@@ -426,6 +471,10 @@ window.App = (function () {
     on("back", back);
     on("theme", toggleTheme);
     on("go", function (data) { navigate(data.to); });
+    /* 옆걸음 이동. 끝난 판(퀴즈 결과·떠올리기 마무리)에서 단어를 열 때 쓴다.
+       흔한 go 로 가면 그 단어의 ← 가 단어장 목록으로 나가 버려서, 틀린 것을
+       하나 읽고 오려던 사람이 나머지 목록을 잃는다. */
+    on("go-side", function (data) { navigateLateral(data.to); });
 
     render();
   }

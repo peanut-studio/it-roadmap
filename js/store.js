@@ -58,6 +58,10 @@ window.Store = (function () {
     return {
       terms: {}, history: [], studyDays: [], lastSeenAt: null,
       read: { hintSeen: false, gloss: [], walked: {} },
+      /* 풀다 만 퀴즈 한 판. 상태(terms)와 섞지 않는다 — 성적은 판이 닫힐 때
+         한 번에 반영되고(settleQuiz), 이 칸은 그 전까지의 중간 과정이다.
+         같은 열쇠 안에 두어야 초기화가 이것까지 함께 지운다. */
+      quiz: null,
     };
   }
 
@@ -246,12 +250,28 @@ window.Store = (function () {
   function overallStats() {
     var terms = allTerms();
     var counts = { new: 0, reading: 0, learned: 0, passed: 0, review: 0 };
-    terms.forEach(function (t) { counts[statusOf(t.id)]++; });
+    /* passed 와 everPassed 는 다른 것을 센다.
+
+       passed   지금 통과 상태인 것. statusOf 를 거치므로 상자가 정한 날이 되면
+                복습으로 빠져나가면서 줄어든다. 막대와 범례는 이 값을 쓴다 —
+                "지금 어디까지 갔나" 를 그리는 것이기 때문이다.
+       everPassed 한 번이라도 통과해 본 것. 저장된 passedAt 만 본다.
+
+       진도 화면의 큰 숫자가 passed 였다. 그래서 스무 개를 통과시키고 며칠 쉬면
+       그 숫자가 스스로 0 을 향해 내려간다. 복습이 돌아온 것은 잘 돌아가고 있다는
+       뜻인데, 화면은 그걸 "네가 해 둔 게 사라졌다" 로 말했다. 해 둔 일은 안 줄어든다. */
+    var ever = 0;
+    terms.forEach(function (t) {
+      counts[statusOf(t.id)]++;
+      var rec = state.terms[t.id];
+      if (rec && rec.passedAt) ever++;
+    });
     return {
       total: terms.length,
       counts: counts,
       studied: counts.reading + counts.learned + counts.passed + counts.review,
       passed: counts.passed,
+      everPassed: ever,
       review: counts.review,
     };
   }
@@ -342,8 +362,18 @@ window.Store = (function () {
   function streak() {
     var days = state.studyDays.slice();
 
+    /* 오늘 칸이 아직 없으면 어제부터 센다.
+
+       예전에는 무조건 오늘부터 셌다. 그래서 서른 날을 이어 온 사람이 아침에
+       앱을 열면 "0일 연속" 이 먼저 떴다 — 아직 오늘 걸 안 했다는 이유로
+       쌓아 온 것이 통째로 없는 것처럼 보였다. 끊긴 게 아니라 아직 안 한 것이다.
+
+       오늘을 studyDays 에 밀어 넣지는 않는다. 한 번도 공부하지 않은 사람은
+       어제 칸도 없으므로 여전히 0 이고, 앱이 하지 않은 일을 했다고 말하지 않는다. */
+    var from = days.indexOf(dayKey(Date.now())) === -1 ? 1 : 0;
+
     var count = 0;
-    for (var i = 0; i < 60; i++) {
+    for (var i = from; i < 60 + from; i++) {
       if (days.indexOf(dayKey(Date.now() - i * DAY)) === -1) break;
       count++;
     }
@@ -516,6 +546,44 @@ window.Store = (function () {
     save();
   }
 
+  /* ---------------------------------------------------------- 풀다 만 퀴즈
+
+     스무 문제짜리 한 판은 7~10분이 걸린다. 홈 화면에 설치한 앱은 그 사이
+     화면이 잠기거나 다른 앱을 보다 오면 탭이 통째로 회수되는데, 그러면
+     열아홉 문제를 푼 판이 상자에 한 칸도 안 남고 사라졌다. 이 저장소는
+     이미 "그만두고 나가도 푼 만큼은 성적이다" 로 정해 두었으므로(quit-quiz),
+     끊긴 판만 그 원칙 밖에 있을 이유가 없다.
+
+     문제는 문자열과 평범한 객체뿐이라 JSON 으로 그대로 오간다. */
+  var QUIZ_TTL = 1 * DAY;
+
+  function saveQuiz(sess) {
+    state.quiz = sess ? { at: Date.now(), session: sess } : null;
+    save();
+  }
+
+  /* 하루가 지난 판은 버린다. 한 달 전에 두고 간 판이 되살아나면
+     "이어서 푸세요" 가 아니라 "이게 뭐지" 가 된다. */
+  function loadQuiz() {
+    var box = state.quiz;
+    if (!box || !box.session || !box.at) return null;
+    if (Date.now() - box.at > QUIZ_TTL) {
+      state.quiz = null;
+      save();
+      return null;
+    }
+    var sess = box.session;
+    // 옛 판이나 망가진 판이 화면을 못 그리게 하는 것보다 버리는 편이 낫다.
+    if (!sess.questions || !sess.questions.length || sess.settled) return null;
+    return sess;
+  }
+
+  function clearQuiz() {
+    if (!state.quiz) return;
+    state.quiz = null;
+    save();
+  }
+
   return {
     STATUS: STATUS,
     STATUS_META: STATUS_META,
@@ -541,6 +609,9 @@ window.Store = (function () {
     markPassed: markPassed,
     markWrong: markWrong,
     settleQuiz: settleQuiz,
+    saveQuiz: saveQuiz,
+    loadQuiz: loadQuiz,
+    clearQuiz: clearQuiz,
     readState: readState,
     markGlossSeen: markGlossSeen,
     markHintSeen: markHintSeen,

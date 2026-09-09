@@ -575,6 +575,10 @@ window.UI = (function () {
     esc: esc,
     plain: plain,
     icon: icon,
+    /* 한 줄짜리 글에 쓴다. markdown() 은 문단·목록·표를 만드는 블록 조립기라
+       제목 옆이나 카드 한 줄에 넣으면 <p> 가 딸려 나온다. inline 은 서식만
+       입히고 태그를 새로 열지 않으므로 <span> 안에 그대로 들어간다. */
+    inline: inline,
     markdown: markdown,
     dohae: renderDohae,
     highlight: highlight,

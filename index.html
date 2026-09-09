@@ -10,10 +10,15 @@
 
   <!-- 홈 화면에 추가하면 독립 앱으로 뜬다.
        theme-color 를 밝기별로 나눠 둬야 상태표시줄이 배경과 이어진다.
-       apple-touch-icon 은 iOS 가 manifest 대신 이걸 본다. -->
+       apple-touch-icon 은 iOS 가 manifest 대신 이걸 본다.
+
+       두 값은 css/tokens.css 의 --paper 와 반드시 같아야 한다. 종이색이
+       따뜻한 쪽에서 차가운 쪽으로 옮겨 갔는데(#fbfaf8 -> #f5f7f8,
+       #141310 -> #12171a) 여기만 옛 값으로 남아, 홈 화면에 설치한 앱의
+       상태표시줄과 본문 사이에 색 띠가 하나 생겨 있었다. -->
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#141310" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f7f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12171a" media="(prefers-color-scheme: dark)">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="IT 단어">

@@ -41,8 +41,13 @@
     });
   }
 
+  /* 한 판의 길이. 홈의 발판이 "읽은 단어 512개, 뜻을 떠올려볼까요" 라고 적으면서
+     실제로는 12장만 주었다. 숫자를 두 곳이 따로 알고 있어서 생긴 어긋남이라,
+     퀴즈가 SESSION_MAX 를 내보내는 방식(js/quiz-screens.js)을 그대로 따른다. */
+  var SESSION_MAX = 12;
+
   function start(terms, label) {
-    var queue = (terms || []).slice(0, 12);
+    var queue = (terms || []).slice(0, SESSION_MAX);
     if (!queue.length) {
       UI.toast("떠올릴 단어가 아직 없습니다", "inbox");
       return;
@@ -50,6 +55,10 @@
     session = {
       queue: queue,
       label: label || "떠올리기",
+      /* 시작한 자리. ✕ 로 아무것도 안 하고 나갈 때 돌아갈 곳이다.
+         한 장짜리 판은 단어를 읽다가 여는 것이라, 그냥 홈으로 보내면
+         3,000px 을 내려가며 읽던 자리를 통째로 잃는다. */
+      from: App.currentPath(),
       total: queue.length,
       seen: 0,       // 보여준 카드 수 (같은 단어를 다시 보면 또 센다)
       done: [],      // 떠올린 단어
@@ -130,7 +139,8 @@
     if (!term || Store.hasBody(term.bookId) || Store.bodyFailed(term.bookId)) return;
     Store.loadBody(term.bookId, function (ok) {
       if (!ok) return;
-      if (App.currentPath() === "/recall/run") App.render();
+      // 뒤늦게 도착한 본문으로 질문 한 줄이 붙을 뿐이다. 카드는 그대로 둔다.
+      if (App.currentPath() === "/recall/run") App.refresh();
     });
   }
 
@@ -206,7 +216,8 @@
 
       // 질문은 답을 편 뒤에도 자리에 남는다. 무엇을 물었는지 보면서 확인해야
       // 자기 답과 견줄 수 있다. 질문이 사라지면 견줄 대상이 없다.
-      (ask ? '<p class="recall__ask">' + esc(ask.q) + "</p>" : "") +
+      // 확인 질문에는 `/24` 같은 인라인 코드가 들어 있다. screens.js 와 같은 판정.
+      (ask ? '<p class="recall__ask">' + UI.inline(ask.q) + "</p>" : "") +
 
       (session.shown
         ? '<div class="recall__answer prose">' + UI.markdown(term.summary) + "</div>" +
@@ -232,7 +243,9 @@
   App.on("recall-show", function () {
     if (!session) return;
     session.shown = true;
-    App.render();
+    /* 같은 카드가 펴지는 것이다. 다음 카드로 넘어가는 것(282행)과 달리
+       화면이 바뀌지 않으므로 제자리 갱신으로 연다. */
+    App.refresh();
   });
 
   /* 떠올렸으면 학습 완료로 올린다. 이제 퀴즈에서 확인할 자격이 생긴다. */
@@ -284,8 +297,10 @@
   App.on("quit-recall", function () {
     var had = session && (session.done.length || session.again.length);
     if (!had) {
+      var from = session && session.from;
       session = null;
-      App.navigate("/home");
+      // 아무것도 안 한 판이면 열기 전 자리로 돌려보낸다.
+      App.navigate(from && from !== "/recall/run" ? from : "/home");
       return;
     }
     App.navigate("/recall/done");
@@ -303,15 +318,23 @@
 
     var got = session.done.length;
     var again = session.again.length;
-    var readyForQuiz = Store.allTerms().filter(function (t) {
-      return Store.statusOf(t.id) === Store.STATUS.LEARNED;
+    /* 이번 판에서 떠올린 것 가운데 퀴즈에 낼 수 있는 것을 센다.
+
+       예전에는 앱 전체에서 LEARNED 인 것을 셌다. 그래서 복습 단어만 떠올린 판은
+       마무리가 "이제 퀴즈로 확인할 차례입니다" 라고 말해 놓고 그 단추를 안 줬다 —
+       복습 단어는 statusOf 가 REVIEW 라서 한 개도 안 세어졌기 때문이다.
+       /quiz 에는 "복습" 범위 카드가 이미 있으므로 갈 곳은 있다. */
+    var readyForQuiz = session.done.filter(function (id) {
+      var st = Store.statusOf(id);
+      return st === Store.STATUS.LEARNED || st === Store.STATUS.REVIEW;
     }).length;
 
     var rows = function (ids) {
       return ids.map(function (id) {
         var t = Store.termById(id);
         if (!t) return "";
-        return '<button class="result-row" data-action="go" data-to="/term/' + esc(t.id) + '">' +
+        // 퀴즈 결과와 같은 판정 — 여기서 단어로 가는 것도 옆걸음이다.
+        return '<button class="result-row" data-action="go-side" data-to="/term/' + esc(t.id) + '">' +
           Parts.statusDot(Store.statusOf(t.id)) +
           '<span class="result-row__term">' + esc(t.term) + "</span>" +
           '<span class="meta">' + esc(t.bookName) + "</span>" +
@@ -348,5 +371,6 @@
       "</main>";
   });
 
-  window.Recall = { candidates: candidates };
+  // 홈의 발판이 한 판 길이를 여기서 읽는다. 두 곳이 따로 알면 또 어긋난다.
+  window.Recall = { candidates: candidates, SESSION_MAX: SESSION_MAX };
 })();

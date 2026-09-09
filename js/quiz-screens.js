@@ -14,15 +14,22 @@
   var Parts = window.Parts;
   var esc = UI.esc;
 
-  /* 진행 중인 퀴즈 한 판. 새로고침하면 사라진다.
-     목업이므로 중간에 나갔다 오는 상황까지는 다루지 않는다. */
-  var session = null;
+  /* 진행 중인 퀴즈 한 판.
+
+     저장소에 얹혀 있어서 앱을 껐다 켜도 이어서 푼다. 스무 문제는 7~10분이라
+     그 사이 화면이 잠기거나 다른 앱을 보다 오면 탭이 회수되는데, 예전에는
+     그때 푼 것이 통째로 사라졌다. 하루가 지난 판은 Store 가 알아서 버린다. */
+  var session = Store.loadQuiz();
 
   function startSession(questions, scopeLabel, fromTermId) {
     if (!questions.length) {
       UI.toast("출제할 단어가 아직 부족합니다", "inbox");
       return;
     }
+    /* 새 판을 열기 전에 풀던 판을 닫는다. 이 저장소의 원칙이 "그만둔 판도 푼
+       만큼은 성적이다" 이므로(settle 주석), 다른 범위를 골랐다는 이유로 이미
+       답한 것을 버릴 이유가 없다. settle 은 한 판에 한 번만 듣는다. */
+    settle();
     session = {
       questions: questions,
       scopeLabel: scopeLabel,
@@ -37,6 +44,7 @@
          여러 번 그려지는데, 그때마다 상자가 또 움직이면 안 된다. */
       settled: false,
     };
+    Store.saveQuiz(session);
     App.navigate("/quiz/run");
   }
 
@@ -223,6 +231,12 @@
   }
 
   App.register("/quiz", function () {
+    /* 색인이 없으면 범위 카드가 전부 "지금은 없습니다" 로 떠서, 파일을 못 받은
+       것을 "네가 아직 안 읽었다" 로 말하게 된다. 홈·단어장·진도와 같은 화면을 쓴다. */
+    if (!Store.books().length) {
+      return Parts.topbar({ title: "퀴즈", right: Parts.themeButton() }) + Parts.indexFailed();
+    }
+
     /* 본문이 도착하면 문항 수를 다시 센다. 다시 그리는 건 한 번뿐이다 —
        두 번째부터는 받을 게 없어서 여기서 그냥 돌아간다.
        보던 자리는 refresh 가 지켜준다. 숫자가 바뀌었다고 목록이 맨 위로 튀면 안 된다. */
@@ -256,12 +270,36 @@
             '<button class="link-btn" data-action="retry-bodies">다시 시도</button></p>'
           : "") +
 
+      /* 풀다 만 판이 있으면 그 손잡이를 맨 앞에 준다. 없으면 저장해 둔
+         뜻이 없다 — 여기서 새 범위를 고르는 순간 아까 풀던 판을 덮어쓴다. */
+      resumeCall() +
+
       '<div class="stack" style="margin-top:28px">' + suggested.map(scopeCard).join("") + "</div>" +
       '<section class="block"><h2 class="section-title" style="margin-bottom:4px">단어장에서 고르기</h2>' +
       '<div class="scope-rows">' + books.map(scopeRow).join("") + "</div></section>" +
       "</div></main>";
   });
 
+
+  /* 풀다 만 판을 이어 푸는 손잡이. 몇 문제를 풀었고 몇 개가 남았는지를
+     같이 적는다 — "이어서 풀기" 만으로는 다시 들어갈 만한지 알 수 없다. */
+  function resumeCall() {
+    if (!session || session.settled || !session.answers.length) return "";
+    var left = session.questions.length - session.index;
+    if (left <= 0) return "";
+    return '<button class="review-call" data-action="resume-quiz" style="margin-top:24px">' +
+      '<span class="review-call__icon">' + UI.icon("rotate", 22) + "</span>" +
+      '<span style="flex:1;min-width:0">' +
+      '<span class="review-call__title">풀던 판이 남아 있습니다 · ' + left + "문제</span>" +
+      '<span class="review-call__sub">' + esc(session.scopeLabel || "퀴즈") + " · " +
+      session.answers.length + "문제까지 풀었습니다</span></span>" +
+      UI.icon("right", 18) + "</button>";
+  }
+
+  App.on("resume-quiz", function () {
+    if (!session) return;
+    App.navigate("/quiz/run");
+  });
 
   App.on("start-scope", function (data) {
     var pool = Store.allTerms();
@@ -470,7 +508,12 @@
     });
     if (right) session.correct++;
 
-    /* 여기서는 저장하지 않는다.
+    /* 푼 자리는 저장한다. 성적이 아니라 "어디까지 왔나" 다 — 아래 주석이
+       말하는 "저장하지 않는다" 는 상자(markPassed/markWrong) 이야기고,
+       이건 앱이 꺼져도 이 판을 이어 풀 수 있게 하는 것이다. */
+    Store.saveQuiz(session);
+
+    /* 여기서는 상태를 저장하지 않는다.
 
        예전에는 문제 하나마다 markPassed/markWrong 을 불렀다. 그런데 Quiz.build 는
        단어 하나에서 최대 열한 문제를 뽑고 markPassed 는 부를 때마다 상자를 한 칸
@@ -482,7 +525,11 @@
        "모르겠어요"도 오답과 같이 다룬다 — 결과는 같지만 말투는 다르게 한다.
        모른다고 인정한 사람에게 틀렸다고 할 이유가 없다. */
 
-    App.render();
+    /* 문제는 그대로 있고 그 위에 판정과 해설만 얹힌다. 화면이 바뀐 게 아니므로
+       제자리 갱신이다. render() 로 그리면 방금 누른 보기가 통째로 사라졌다가
+       미끄러져 들어오고, 스크롤도 맨 위로 되감긴다 —
+       고른 자리를 보면서 왜 틀렸는지 읽어야 하는데 그 자리를 뺏는다. */
+    App.refresh();
     revealFeedback();
   });
 
@@ -493,8 +540,17 @@
      끝까지 푼 판만 반영하는 것이 아니다. 그만둔 판도 푼 만큼은 성적이다.
      한 번도 안 나온 단어는 넘기지 않는다 — 물어본 적이 없으니 판정할 근거도 없다. */
   function settle() {
-    if (!session || session.settled || !session.answers.length) return;
+    if (!session || session.settled) {
+      // 판이 이미 닫혔으면 저장해 둔 것도 지운다. 새로고침하면 범위 화면으로 나간다.
+      Store.clearQuiz();
+      return;
+    }
+    if (!session.answers.length) {
+      Store.clearQuiz();
+      return;
+    }
     session.settled = true;
+    Store.clearQuiz();
 
     var order = [];
     var byTerm = {};
@@ -513,6 +569,7 @@
     if (!session) return;
     session.picked = null;
     session.index++;
+    Store.saveQuiz(session);
 
     if (session.index >= session.questions.length) {
       // 판이 여기서 닫힌다. 결과 화면에 닿기 전에 반영해야 목록의 점과 제목이 맞는다.
@@ -549,7 +606,9 @@
      제자리로 돌아가 겹치지 않는다. 답을 고른 뒤 읽어야 할 것은 아래에 있으니
      시선을 따라가게 하는 편이 맞다.
 
-     App.render() 가 매번 맨 위로 올리므로 그 뒤에 실행되어야 한다. */
+     App.refresh() 뒤에 불러야 한다. refresh 는 마지막에 읽던 자리로 한 번 더
+     스크롤을 되돌리므로(js/app.js draw 끝), 순서가 뒤바뀌면 그 되돌림이
+     여기서 내린 것을 도로 감는다. */
   function revealFeedback() {
     var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({
@@ -558,8 +617,12 @@
     });
   }
 
+  /* 해설의 "다시 읽기" 는 판을 떠나는 것이 아니라 잠깐 옆으로 새는 것이다.
+     흔한 navigate 로 가면 도착한 단어의 ← 가 그 단어의 단어장으로 나가서,
+     확인만 하고 오려던 사람이 풀던 20문제를 잃는다.
+     js/recall.js 의 recall-reread 는 같은 판정을 이미 하고 있었다. */
   App.on("open-term", function (data) {
-    App.navigate("/term/" + data.id);
+    App.navigateLateral("/term/" + data.id);
   });
 
   /* ---------------------------------------------------------- 결과
@@ -675,14 +738,27 @@
     // 상세 화면에서 한 문제만 확인하러 들어온 사람. 읽던 자리로 돌아갈 길이 필요하다.
     var from = session.fromTermId ? Store.termById(session.fromTermId) : null;
 
-    var rowsFor = function (list, iconName) {
+    /* withDays 는 통과 목록에서만 켠다.
+
+       상자[1,3,7,16,35]가 단어마다 "며칠 뒤에 다시 물어볼지" 를 정해 두는데,
+       그 날짜가 화면 어디에도 안 나왔다. 결과 문구는 "며칠 뒤 복습에 다시
+       올라옵니다" 라고만 말하고 며칠인지는 안 말한다 — 정작 값은 이미 서 있다.
+       settle() 이 위에서 끝났으므로 dueAt 이 서 있는 상태다.
+
+       틀린 목록에는 붙이지 않는다. markWrong 이 dueAt 을 지금으로 두어
+       늘 "0일 뒤" 가 나오고, 그건 알려주는 게 아니라 헷갈리게 한다. */
+    var rowsFor = function (list, iconName, withDays) {
       return list.map(function (termId) {
         var t = Store.termById(termId);
         if (!t) return "";
-        return '<button class="result-row" data-action="go" data-to="/term/' + esc(t.id) + '">' +
+        var days = withDays ? Store.dueInDays(t.id) : null;
+        // 결과에서 단어로 가는 것도 옆걸음이다. ← 로 이 목록에 돌아와야
+        // 나머지 틀린 단어를 마저 볼 수 있다.
+        return '<button class="result-row" data-action="go-side" data-to="/term/' + esc(t.id) + '">' +
           Parts.statusDot(Store.statusOf(t.id)) +
           '<span class="result-row__term">' + esc(t.term) + "</span>" +
-          '<span class="meta">' + esc(t.bookName) + "</span>" +
+          '<span class="meta">' +
+          esc(days ? days + "일 뒤 복습" : t.bookName) + "</span>" +
           UI.icon(iconName, 16) + "</button>";
       }).join("");
     };
@@ -723,7 +799,7 @@
 
       (right.length
         ? '<section class="block"><h2 class="section-title" style="margin-bottom:4px">통과한 단어</h2>' +
-          '<div class="result__list" style="margin-top:8px">' + rowsFor(right, "right") + "</div></section>"
+          '<div class="result__list" style="margin-top:8px">' + rowsFor(right, "right", true) + "</div></section>"
         : "") +
       "</main>";
   });
