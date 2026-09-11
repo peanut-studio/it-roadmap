@@ -4519,6 +4519,632 @@
       }
     ]
   },
+  "ai--structured-output": {
+    "alt": "네 컷 — 받고 싶은 칸을 미리 그려 보내면 모델이 그 칸 밖으로 나가지 못해 뜯어내지 않고 바로 읽을 수 있게 되는 이야기, 다만 칸 안에 든 값이 맞는지는 전혀 다른 문제라는 이야기",
+    "cuts": [
+      {
+        "caption": "칸을 그려 준다",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "flat"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "mid",
+          "payload": {
+            "text": "빈 양식",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "칸 밖을 막는다",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "문서",
+            "slot": "right",
+            "tag": {
+              "text": "칸만 채움",
+              "tone": "blue"
+            }
+          }
+        ]
+      },
+      {
+        "caption": "바로 읽힌다",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "happy"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "mid",
+          "to": "left",
+          "payload": {
+            "text": "채운 양식",
+            "tone": "blue"
+          }
+        },
+        "check": true
+      },
+      {
+        "caption": "맞는지는 별개",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "sad"
+          },
+          {
+            "part": "문서",
+            "slot": "right",
+            "tag": {
+              "text": "엉뚱한 값",
+              "tone": "blue"
+            }
+          }
+        ],
+        "check": false
+      }
+    ]
+  },
+  "ai--system-prompt": {
+    "alt": "네 컷 — 대화가 시작되기 전에 걸어 둔 지시문이 사람이 뒤에 무슨 말을 하든 앞서서 이기는 이야기, 다만 앞선다는 것이지 못 뚫는다는 뜻은 아니어서 숨어 든 말에 뒤집히기도 하는 이야기",
+    "cuts": [
+      {
+        "caption": "먼저 걸어 둔다",
+        "actors": [
+          {
+            "part": "문서",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "mid",
+          "payload": {
+            "text": "너는 상담원",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "사람이 말한다",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "사람",
+            "slot": "right",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "right",
+          "to": "mid",
+          "payload": {
+            "text": "반말해",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "앞선 쪽이 이긴다",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "사람",
+            "slot": "right",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "mid",
+          "to": "right",
+          "payload": {
+            "text": "존댓말",
+            "tone": "blue"
+          }
+        },
+        "check": true
+      },
+      {
+        "caption": "절대는 아니다",
+        "actors": [
+          {
+            "part": "문서",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "sad"
+          },
+          {
+            "part": "사람",
+            "slot": "right",
+            "face": "happy"
+          }
+        ],
+        "move": {
+          "from": "right",
+          "to": "mid",
+          "payload": {
+            "text": "앞말 잊어",
+            "tone": "blue"
+          }
+        },
+        "check": false
+      }
+    ]
+  },
+  "ai--temperature": {
+    "alt": "네 컷 — 후보마다 매겨진 점수를 손잡이 하나로 눌러 평평하게 만들면 2등 3등도 뽑히게 되는 이야기, 후보 자체가 늘거나 줄지는 않고 점수 사이의 거리만 달라진다는 이야기",
+    "cuts": [
+      {
+        "caption": "후보에 점수",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "막대",
+            "slot": "right",
+            "tag": {
+              "text": "7:2:1",
+              "tone": "blue"
+            }
+          }
+        ]
+      },
+      {
+        "caption": "손잡이를 민다",
+        "actors": [
+          {
+            "part": "스위치",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "막대",
+            "slot": "right"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "right",
+          "payload": {
+            "text": "평평하게",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "2등도 뽑힌다",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "막대",
+            "slot": "right",
+            "tag": {
+              "text": "5:3:2",
+              "tone": "blue"
+            }
+          }
+        ],
+        "check": true
+      },
+      {
+        "caption": "후보는 안 는다",
+        "actors": [
+          {
+            "part": "스위치",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "막대",
+            "slot": "right",
+            "tag": {
+              "text": "셋 그대로",
+              "tone": "blue"
+            }
+          }
+        ],
+        "check": false
+      }
+    ]
+  },
+  "ai--term-7edc1a6b": {
+    "alt": "네 컷 — 사진이 숫자로 들어가 층을 지날수록 선에서 귀로 얼굴로 점점 큰 덩어리가 잡히며 답 하나가 나오는 이야기, 그러나 왜 그렇게 답했는지는 층마다의 무게 안에 흩어져 남을 뿐이라는 이야기",
+    "cuts": [
+      {
+        "caption": "숫자로 들어간다",
+        "actors": [
+          {
+            "part": "문서",
+            "slot": "left"
+          },
+          {
+            "part": "깔때기",
+            "slot": "mid"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "mid",
+          "payload": {
+            "text": "점 값",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "층마다 걸러진다",
+        "actors": [
+          {
+            "part": "문서",
+            "slot": "left"
+          },
+          {
+            "part": "깔때기",
+            "slot": "mid",
+            "tag": {
+              "text": "선·귀·얼굴",
+              "tone": "blue"
+            }
+          }
+        ]
+      },
+      {
+        "caption": "점수가 나온다",
+        "actors": [
+          {
+            "part": "깔때기",
+            "slot": "mid"
+          },
+          {
+            "part": "표지판",
+            "slot": "right"
+          }
+        ],
+        "move": {
+          "from": "mid",
+          "to": "right",
+          "payload": {
+            "text": "고양이",
+            "tone": "blue"
+          }
+        },
+        "check": true
+      },
+      {
+        "caption": "규칙은 안 남는다",
+        "actors": [
+          {
+            "part": "깔때기",
+            "slot": "mid",
+            "tag": {
+              "text": "무게뿐",
+              "tone": "blue"
+            }
+          },
+          {
+            "part": "표지판",
+            "slot": "right"
+          }
+        ],
+        "check": false
+      }
+    ]
+  },
+  "ai--term-c69518b3": {
+    "alt": "네 컷 — 어디가 바닥인지 안 보이는 자리에서 발밑 기울기만 더듬어 내리막으로 한 걸음씩 딛기를 되풀이하는 이야기, 보폭을 크게 잡으면 골짜기를 건너뛰어 오히려 튀어 오르는 이야기",
+    "cuts": [
+      {
+        "caption": "높은 데 있다",
+        "actors": [
+          {
+            "part": "사람",
+            "slot": "left",
+            "face": "sad"
+          },
+          {
+            "part": "계단",
+            "slot": "mid",
+            "tag": {
+              "text": "틀림 큼",
+              "tone": "blue"
+            }
+          }
+        ]
+      },
+      {
+        "caption": "발밑만 본다",
+        "actors": [
+          {
+            "part": "사람",
+            "slot": "left",
+            "face": "flat"
+          },
+          {
+            "part": "계단",
+            "slot": "mid"
+          }
+        ],
+        "move": {
+          "from": "mid",
+          "to": "left",
+          "payload": {
+            "text": "이쪽이 아래",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "한 걸음 내린다",
+        "actors": [
+          {
+            "part": "사람",
+            "slot": "left",
+            "face": "flat"
+          },
+          {
+            "part": "계단",
+            "slot": "mid",
+            "tag": {
+              "text": "틀림 줄음",
+              "tone": "blue"
+            }
+          }
+        ],
+        "check": true
+      },
+      {
+        "caption": "보폭이 크면 튄다",
+        "actors": [
+          {
+            "part": "사람",
+            "slot": "left",
+            "face": "sad"
+          },
+          {
+            "part": "계단",
+            "slot": "mid",
+            "tag": {
+              "text": "건너뛴다",
+              "tone": "blue"
+            }
+          }
+        ],
+        "check": false
+      }
+    ]
+  },
+  "ai--term-ddd274d7": {
+    "alt": "네 컷 — 사람이 미리 답을 달아 둔 예를 답을 가린 채 맞혀 보게 하고 틀린 만큼 고치기를 되풀이하는 이야기, 답표가 없으면 잘하고 있는지 잴 자조차 없다는 이야기",
+    "cuts": [
+      {
+        "caption": "답이 붙어 있다",
+        "actors": [
+          {
+            "part": "장부",
+            "slot": "left",
+            "tag": {
+              "text": "사진+정답",
+              "tone": "blue"
+            }
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ]
+      },
+      {
+        "caption": "가리고 맞혀 본다",
+        "actors": [
+          {
+            "part": "장부",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "표지판",
+            "slot": "right"
+          }
+        ],
+        "move": {
+          "from": "mid",
+          "to": "right",
+          "payload": {
+            "text": "개!",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "틀린 만큼 고친다",
+        "actors": [
+          {
+            "part": "장부",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "happy"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "mid",
+          "payload": {
+            "text": "고양이야",
+            "tone": "blue"
+          }
+        },
+        "check": true
+      },
+      {
+        "caption": "답표가 없으면",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "sad",
+            "tag": {
+              "text": "잴 자 없음",
+              "tone": "blue"
+            }
+          },
+          {
+            "part": "표지판",
+            "slot": "right"
+          }
+        ],
+        "check": false
+      }
+    ]
+  },
+  "ai--term-ffd91e00": {
+    "alt": "네 컷 — 같은 연습 자료를 오래 먹이다 보면 규칙이 아니라 그 자료에만 있던 잡음까지 외워 연습에서는 만점이 나오는 이야기, 그리고 처음 보는 문제에서 그대로 무너지는 이야기",
+    "cuts": [
+      {
+        "caption": "연습을 먹인다",
+        "actors": [
+          {
+            "part": "장부",
+            "slot": "left",
+            "tag": {
+              "text": "본 문제",
+              "tone": "blue"
+            }
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ]
+      },
+      {
+        "caption": "잡음까지 외운다",
+        "actors": [
+          {
+            "part": "장부",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "mid",
+          "payload": {
+            "text": "잡음까지",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "연습은 만점",
+        "actors": [
+          {
+            "part": "장부",
+            "slot": "left"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "happy",
+            "tag": {
+              "text": "99점",
+              "tone": "blue"
+            }
+          }
+        ],
+        "check": true
+      },
+      {
+        "caption": "새 문제엔 무너진다",
+        "actors": [
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "sad"
+          },
+          {
+            "part": "문서",
+            "slot": "right"
+          }
+        ],
+        "move": {
+          "from": "right",
+          "to": "mid",
+          "payload": {
+            "text": "처음 보는 것",
+            "tone": "blue"
+          }
+        },
+        "check": false
+      }
+    ]
+  },
   "ai--text-to-sql": {
     "alt": "네 컷 — 쿼리를 못 써서 저장소에 물을 수 없던 사람이, 말을 쿼리로 옮겨 주는 자리를 거쳐 곧바로 숫자를 받는 이야기다, 조건이 하나 빠져도 쿼리는 잘 돌아가고 숫자만 틀리게 나오므로 나왔다고 맞는 것은 아닌 이야기",
     "cuts": [
@@ -4750,6 +5376,109 @@
           }
         },
         "check": false
+      }
+    ]
+  },
+  "ai--tool-calling": {
+    "alt": "네 컷 — 물음을 받은 모델이 답 대신 '이 도구를 이 값으로 불러 달라'는 부탁만 돌려주고, 앱이 그 도구를 실제로 실행해 값을 가져와야 비로소 답이 되는 이야기, 손을 쓰는 쪽은 언제나 앱이라는 이야기",
+    "cuts": [
+      {
+        "caption": "물음이 온다",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "flat"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "left",
+          "to": "mid",
+          "payload": {
+            "text": "오늘 환율?",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "부탁만 돌려준다",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "flat"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "mid",
+          "to": "left",
+          "payload": {
+            "text": "환율 불러줘",
+            "tone": "blue"
+          }
+        },
+        "bubble": {
+          "slot": "mid",
+          "text": "난 못 해"
+        }
+      },
+      {
+        "caption": "앱이 갔다 온다",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "flat"
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          },
+          {
+            "part": "저장통",
+            "slot": "right",
+            "face": "flat"
+          }
+        ],
+        "move": {
+          "from": "right",
+          "to": "left",
+          "payload": {
+            "text": "1450원",
+            "tone": "blue"
+          }
+        }
+      },
+      {
+        "caption": "손은 앱에 있다",
+        "actors": [
+          {
+            "part": "컴퓨터",
+            "slot": "left",
+            "face": "happy",
+            "tag": {
+              "text": "1450원",
+              "tone": "blue"
+            }
+          },
+          {
+            "part": "서버",
+            "slot": "mid",
+            "face": "flat"
+          }
+        ],
+        "check": true
       }
     ]
   },
